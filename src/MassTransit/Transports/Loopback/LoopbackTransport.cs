@@ -1,4 +1,4 @@
-// Copyright 2007-2011 The Apache Software Foundation.
+// Copyright 2007-2011 Chris Patterson, Dru Sellers, Travis Smith, et. al.
 //  
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 // this file except in compliance with the License. You may obtain a copy of the 
@@ -15,34 +15,52 @@ namespace MassTransit.Transports
 	using System;
 	using System.Collections.Generic;
 	using System.Threading;
+	using Context;
 	using Loopback;
+	using Magnum.Extensions;
 
 	public class LoopbackTransport :
 		TransportBase
 	{
-		private readonly object _messageLock = new object();
-		private AutoResetEvent _messageReady = new AutoResetEvent(false);
-		private LinkedList<LoopbackMessage> _messages = new LinkedList<LoopbackMessage>();
+		readonly object _messageLock = new object();
+		AutoResetEvent _messageReady = new AutoResetEvent(false);
+		LinkedList<LoopbackMessage> _messages = new LinkedList<LoopbackMessage>();
 
 		public LoopbackTransport(IEndpointAddress address)
 			: base(address)
 		{
 		}
 
-		public override void Send(Action<ISendContext> callback)
+		public override void Send(ISendContext context)
 		{
-			EnsureNotDisposed();
+			GuardAgainstDisposed();
 
-			using (var context = new LoopbackSendContext())
+			LoopbackMessage message = null;
+			try
 			{
-				callback(context);
+				message = new LoopbackMessage();
+
+				if (context.ExpirationTime.HasValue)
+				{
+					message.ExpirationTime = context.ExpirationTime.Value;
+				}
+
+				context.SerializeTo(message.Body);
+				message.ContentType = context.ContentType;
 
 				lock (_messageLock)
 				{
-					EnsureNotDisposed();
+					GuardAgainstDisposed();
 
-					_messages.AddLast(context.GetMessage());
+					_messages.AddLast(message);
 				}
+			}
+			catch
+			{
+				if(message != null)
+					message.Dispose();
+
+				throw;
 			}
 
 			_messageReady.Set();
@@ -50,13 +68,10 @@ namespace MassTransit.Transports
 
 		public override void Receive(Func<IReceiveContext, Action<IReceiveContext>> callback, TimeSpan timeout)
 		{
-			EnsureNotDisposed();
-
 			int messageCount;
 			lock (_messageLock)
 			{
-				if (_disposed)
-					return;
+				GuardAgainstDisposed();
 
 				messageCount = _messages.Count;
 			}
@@ -81,20 +96,35 @@ namespace MassTransit.Transports
 				{
 					if (iterator.Value != null)
 					{
-						var context = new LoopbackReceiveContext(iterator.Value);
-						Action<IReceiveContext> receive = callback(context);
-						if (receive == null)
-							continue;
-
-						_messages.Remove(iterator);
-
-						using (context)
+						LoopbackMessage message = iterator.Value;
+						if(message.ExpirationTime.HasValue && message.ExpirationTime <= DateTime.UtcNow)
 						{
-							Monitor.Exit(_messageLock);
-							monitorExitNeeded = false;
-
-							receive(context);
+							_messages.Remove(iterator);
 							return;
+						}
+
+						var context = ReceiveContext.FromBodyStream(message.Body);
+						context.SetMessageId(message.MessageId);
+						context.SetContentType(message.ContentType);
+						if(message.ExpirationTime.HasValue)
+							context.SetExpirationTime(message.ExpirationTime.Value);
+
+						using (context.CreateScope())
+						{
+							Action<IReceiveContext> receive = callback(context);
+							if (receive == null)
+								continue;
+
+							_messages.Remove(iterator);
+
+							using (message)
+							{
+								Monitor.Exit(_messageLock);
+								monitorExitNeeded = false;
+
+								receive(context);
+								return;
+							}
 						}
 					}
 				}
@@ -113,7 +143,7 @@ namespace MassTransit.Transports
 			}
 		}
 
-		public override void OnDisposing()
+		protected override void OnDisposing()
 		{
 			lock (_messageLock)
 			{
@@ -123,6 +153,9 @@ namespace MassTransit.Transports
 			}
 
 			_messageReady.Close();
+			using (_messageReady)
+			{
+			}
 			_messageReady = null;
 		}
 	}

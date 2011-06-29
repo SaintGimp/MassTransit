@@ -1,5 +1,5 @@
-// Copyright 2007-2011 The Apache Software Foundation.
-// 
+// Copyright 2007-2011 Chris Patterson, Dru Sellers, Travis Smith, et. al.
+//  
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 // this file except in compliance with the License. You may obtain a copy of the 
 // License at 
@@ -12,51 +12,87 @@
 // specific language governing permissions and limitations under the License.
 namespace MassTransit.Transports
 {
-    using System;
-    using System.Collections.Generic;
-    using Configuration;
-    using Exceptions;
-    using Internal;
+	using System;
+	using System.Collections.Generic;
+	using Builders;
+	using EndpointConfigurators;
+	using Exceptions;
+	using Magnum.Extensions;
 
-    public class EndpointFactory :
-        IEndpointFactory
-    {
-        readonly IEnumerable<ITransportFactory> _factories;
+	public class EndpointFactory :
+		IEndpointFactory
+	{
+		readonly IEndpointFactoryDefaultSettings _defaults;
+		readonly IDictionary<Uri, EndpointBuilder> _endpointBuilders;
+		readonly IDictionary<string, ITransportFactory> _transportFactories;
 
-        public EndpointFactory(IEnumerable<ITransportFactory> factories)
-        {
-            _factories = factories;
-        }
+		public EndpointFactory(IDictionary<string, ITransportFactory> transportFactories,
+		                       IDictionary<Uri, EndpointBuilder> endpointBuilders, IEndpointFactoryDefaultSettings defaults)
+		{
+			_transportFactories = transportFactories;
+			_defaults = defaults;
+			_endpointBuilders = endpointBuilders;
+		}
 
-        public IEndpoint BuildEndpoint(Uri uri, Action<IEndpointConfigurator> configurator)
-        {
-            foreach (var fac in _factories)
-            {
-                try
-                {
+		public IEndpoint CreateEndpoint(Uri uri)
+		{
+			string scheme = uri.Scheme.ToLowerInvariant();
 
-                    if (uri.Scheme.ToLowerInvariant() == fac.Scheme)
-                    {
-                        var epc = new EndpointConfigurator();
-                        epc.SetUri(uri);
-                        var s = epc.New(configurator);
+			ITransportFactory transportFactory;
+			if (_transportFactories.TryGetValue(scheme, out transportFactory))
+			{
+				try
+				{
+					EndpointBuilder builder = _endpointBuilders.Retrieve(uri, () =>
+						{
+							var configurator = new EndpointConfiguratorImpl(uri, _defaults);
 
-                        var transport = fac.BuildLoopback(s.Normal);
-                        var errorTransport = fac.BuildLoopback(s.Error);
+							return configurator.CreateBuilder();
+						});
 
-                        var endpoint = new Endpoint(new EndpointAddress(uri), epc.GetSerializer(), transport,
-                                                    errorTransport);
+					return builder.CreateEndpoint(transportFactory);
+				}
+				catch (Exception ex)
+				{
+					throw new EndpointException(uri, "Failed to create endpoint", ex);
+				}
+			}
 
-                        return endpoint;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    throw new EndpointException(uri, "Error", ex);
-                }
-            }
+			throw new ConfigurationException("The {0} scheme was not handled by any registered transport.".FormatWith(uri.Scheme));
+		}
 
-            throw new ConfigurationException("No transport could handle: '{0}'".FormatWith(uri));
-        }
-    }
+		public void AddTransportFactory(ITransportFactory factory)
+		{
+			string scheme = factory.Scheme.ToLowerInvariant();
+
+			_transportFactories[scheme] = factory;
+		}
+
+		bool _disposed;
+
+		public void Dispose()
+		{
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		~EndpointFactory()
+		{
+			Dispose(false);
+		}
+
+		void Dispose(bool disposing)
+		{
+			if (_disposed) return;
+			if (disposing)
+			{
+				_transportFactories.Values.Each(x =>
+					{
+						x.Dispose();
+					});
+			}
+
+			_disposed = true;
+		}
+	}
 }

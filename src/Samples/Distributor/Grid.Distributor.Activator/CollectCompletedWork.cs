@@ -22,12 +22,8 @@ namespace Grid.Distributor.Activator
     using MassTransit;
     using MassTransit.Distributor;
     using System.Configuration;
-    using MassTransit.Configuration;
-    using MassTransit.Services.Subscriptions.Configuration;
-    using MassTransit.Serialization;
-    using MassTransit.Transports.Msmq;
 
-    public class CollectCompletedWork :
+	public class CollectCompletedWork :
         Consumes<CompletedSimpleWorkItem>.All,
         IServiceInterface
     {
@@ -37,42 +33,25 @@ namespace Grid.Distributor.Activator
         private int _sent;
         private readonly List<int> _values = new List<int>();
 
-        public IObjectBuilder ObjectBuilder { get; set; }
-        public IControlBus ControlBus { get; set; }
+		public IServiceBus ControlBus { get; set; }
         public IServiceBus DataBus { get; set; }
 
-        public CollectCompletedWork(IObjectBuilder objectBuilder)
+        public CollectCompletedWork()
         {
-            ObjectBuilder = objectBuilder;
+        	DataBus = ServiceBusFactory.New(x =>
+        		{
+					x.ReceiveFrom(ConfigurationManager.AppSettings["SourceQueue"]);
+        			x.SetPurgeOnStartup(true);
 
-            var endpointFactory = EndpointFactoryConfigurator.New(x =>
-            {
-                x.RegisterTransport<MsmqEndpoint>();
-                x.SetObjectBuilder(objectBuilder);
-                x.SetDefaultSerializer<XmlMessageSerializer>();
-            });
+					x.UseMsmq();
+        			x.UseMulticastSubscriptionClient();
 
-            ControlBus = ControlBusConfigurator.New(x =>
-            {
-                x.SetObjectBuilder(ObjectBuilder);
+					x.SetConcurrentConsumerLimit(4);
+	                x.UseDistributorFor<DoSimpleWorkItem>();
+        			x.UseControlBus();
+        		});
 
-                x.ReceiveFrom(new Uri(ConfigurationManager.AppSettings["SourceQueue"]).AppendToPath("_control"));
-
-                x.PurgeBeforeStarting();
-            });
-
-            DataBus = ServiceBusConfigurator.New(x =>
-            {
-                x.SetObjectBuilder(ObjectBuilder);
-                x.ConfigureService<SubscriptionClientConfigurator>(y =>
-                {
-                    y.SetSubscriptionServiceEndpoint(ConfigurationManager.AppSettings["SubscriptionQueue"]);
-                });
-                x.ReceiveFrom(ConfigurationManager.AppSettings["SourceQueue"]);
-                x.UseControlBus(ControlBus);
-                x.SetConcurrentConsumerLimit(4);
-                x.UseDistributorFor<DoSimpleWorkItem>(endpointFactory);
-            });
+        	ControlBus = DataBus.ControlBus;
         }
 
         public void Consume(CompletedSimpleWorkItem message)
@@ -81,20 +60,32 @@ namespace Grid.Distributor.Activator
 
             int messageMs = DateTime.UtcNow.Subtract(message.RequestCreatedAt).Milliseconds;
 
-            lock (_values)
+        	int max;
+        	int min;
+        	double average;
+        	lock (_values)
             {
                 _values.Add(messageMs);
+            	min = _values.Min();
+            	max = _values.Max();
+            	average = _values.Average();
             }
 
             _log.InfoFormat("Received: {0} - {1} [{2}ms]", _received, message.CorrelationId, messageMs);
-            _log.InfoFormat("Stats\n\tMin: {0:0000.0}ms\n\tMax: {1:0000.0}ms\n\tAvg: {2:0000.0}ms", _values.Min(), _values.Max(), _values.Average());
+        	_log.InfoFormat("Stats\n\tMin: {0:0000.0}ms\n\tMax: {1:0000.0}ms\n\tAvg: {2:0000.0}ms", min, max, average);
         }
 
         public void Start()
         {
-            _unsubscribeAction = DataBus.Subscribe(this);
+            _unsubscribeAction = DataBus.SubscribeInstance(this);
 
-            Thread.Sleep(1000);
+            Thread.Sleep(5000);
+
+        	DataBus.OutboundPipeline.View(Console.WriteLine);
+
+			Thread.Sleep(5000);
+			Thread.Sleep(5000);
+			Thread.Sleep(5000);
 
             for (int i = 0; i < 100; i++)
             {

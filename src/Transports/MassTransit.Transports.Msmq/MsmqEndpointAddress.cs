@@ -24,29 +24,41 @@ namespace MassTransit.Transports.Msmq
 		{
 			PublicQueuesNotAllowed();
 
-			FormatName = MsmqUriParser.GetFormatName(uri);
+			InboundFormatName = uri.GetInboundFormatName();
 
-			IsTransactional = CheckForTransactionalHint();
+			OutboundFormatName = uri.GetOutboundFormatName();
 
-			if (IsLocal)
+			IsTransactional = CheckForTransactionalHint(uri);
+
+			MulticastAddress = uri.GetMulticastAddress();
+			if(MulticastAddress != null)
+			{
+				IsTransactional = false;
+				LocalName = uri.GetLocalName();
+			}
+			else if (IsLocal)
 			{
 				IsTransactional = IsLocalQueueTransactional();
 
-				LocalName = MsmqUriParser.GetLocalName(uri);
+				LocalName = uri.GetLocalName();
 
 				Uri = SetUriHostToLocalMachineName();
 			}
 		}
 
-		public string FormatName { get; private set; }
+		public string InboundFormatName { get; private set; }
+
+		public string OutboundFormatName { get; private set; }
 
 		public string LocalName { get; private set; }
+
+		public string MulticastAddress { get; private set; }
 
 		private bool IsLocalQueueTransactional()
 		{
 			try
 			{
-				using (var queue = new MessageQueue(FormatName, QueueAccessMode.PeekAndAdmin))
+				using (var queue = new MessageQueue(InboundFormatName, QueueAccessMode.PeekAndAdmin))
 				{
 					return queue.Transactional;
 				}
@@ -74,6 +86,13 @@ namespace MassTransit.Transports.Msmq
 				"Bad: msmq://machinename/round_file/queue_name");
 		}
 
+		protected override bool DetermineIfEndpointIsLocal(Uri uri)
+		{
+			if (uri.Scheme.ToLowerInvariant() == "msmq-pgm")
+				return true;
+
+			return base.DetermineIfEndpointIsLocal(uri);
+		}
 
 		private Uri SetUriHostToLocalMachineName()
 		{

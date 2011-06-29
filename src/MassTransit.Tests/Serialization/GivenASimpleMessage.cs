@@ -14,8 +14,12 @@ namespace MassTransit.Tests.Serialization
 {
     using System.Diagnostics;
     using System.IO;
+    using System.Linq;
     using System.Text;
+    using Context;
+    using Magnum.TestFramework;
     using MassTransit.Serialization;
+    using MassTransit.Services.Subscriptions.Messages;
     using Messages;
     using NUnit.Framework;
 
@@ -38,7 +42,7 @@ namespace MassTransit.Tests.Serialization
 
             using (var output = new MemoryStream())
             {
-                serializer.Serialize(output, Message);
+                serializer.Serialize(output, new SendContext<PingMessage>(Message));
 
                 serializedMessageData = output.ToArray();
 
@@ -47,16 +51,22 @@ namespace MassTransit.Tests.Serialization
 
             using (var input = new MemoryStream(serializedMessageData))
             {
-                var receivedMessage = serializer.Deserialize(input) as PingMessage;
+				var receiveContext = ReceiveContext.FromBodyStream(input);
+				serializer.Deserialize(receiveContext);
 
-                Assert.AreEqual(Message, receivedMessage);
+				IConsumeContext<PingMessage> context;
+				receiveContext.TryGetContext<PingMessage>(out context).ShouldBeTrue();
+
+				context.ShouldNotBeNull();
+
+				context.Message.ShouldEqual(Message);
             }
         }
     }
  
     [TestFixture]
-    public class WhenUsingTheCustomXmlOnSimpleMessage :
-        GivenASimpleMessage<CustomXmlMessageSerializer>
+    public class WhenUsingTheXmlOnSimpleMessage :
+        GivenASimpleMessage<XmlMessageSerializer>
     {
         
     }
@@ -78,6 +88,13 @@ namespace MassTransit.Tests.Serialization
     [TestFixture]
     public class WhenUsingJsonOnSimpleMessage :
         GivenASimpleMessage<JsonMessageSerializer>
+    {
+        
+    }
+
+	[TestFixture]
+    public class WhenUsingBsonOnSimpleMessage :
+        GivenASimpleMessage<BsonMessageSerializer>
     {
         
     }

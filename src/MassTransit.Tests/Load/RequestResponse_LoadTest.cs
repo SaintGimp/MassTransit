@@ -32,8 +32,8 @@ namespace MassTransit.Tests.Load
 
 			ManualResetEvent completed = new ManualResetEvent(false);
 
-			LocalBus.Subscribe<PingMessage>(x => CurrentMessage.Respond(new PongMessage(x.CorrelationId)));
-			LocalBus.Subscribe<PongMessage>(x =>
+			LocalBus.SubscribeHandler<PingMessage>(x => LocalBus.Context().Respond(new PongMessage(x.CorrelationId)));
+			LocalBus.SubscribeHandler<PongMessage>(x =>
 				{
 					if (Interlocked.Increment(ref responsesReceived) == repeatCount)
 					{
@@ -50,7 +50,7 @@ namespace MassTransit.Tests.Load
 				LocalBus.Publish(new PingMessage());
 			}
 
-			bool success = completed.WaitOne(60.Seconds(), true);
+			completed.WaitOne(60.Seconds(), true);
 
 			stopwatch.Stop();
 

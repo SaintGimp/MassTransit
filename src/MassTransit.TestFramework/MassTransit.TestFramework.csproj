@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>MassTransit.TestFramework</RootNamespace>
     <AssemblyName>MassTransit.TestFramework</AssemblyName>
-    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
@@ -31,12 +31,13 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\bin\TestFramework\</OutputPath>
+    <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -47,12 +48,13 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\bin\TestFramework\</OutputPath>
+    <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>..\bin\TestFramework\MassTransit.TestFramework.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\MassTransit.TestFramework.XML</DocumentationFile>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <NoWarn>1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="log4net, Version=1.2.10.0, Culture=neutral, PublicKeyToken=1b44e1d426115821, processorArchitecture=MSIL">
@@ -60,16 +62,21 @@
       <HintPath>..\..\lib\log4net.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Magnum">
-      <HintPath>..\..\lib\Magnum\Magnum.dll</HintPath>
+    <Reference Include="Magnum" Condition="'$(TargetFrameworkVersion)' == 'v3.5'">
+      <HintPath>..\..\lib\Magnum\net-3.5\Magnum.dll</HintPath>
     </Reference>
-    <Reference Include="Magnum.TestFramework, Version=1.0.0.230, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\lib\Magnum\Magnum.TestFramework.dll</HintPath>
+    <Reference Include="Magnum" Condition="'$(TargetFrameworkVersion)' == 'v4.0'">
+      <HintPath>..\..\lib\Magnum\net-4.0\Magnum.dll</HintPath>
     </Reference>
-    <Reference Include="nunit.framework, Version=2.5.2.9222, Culture=neutral, PublicKeyToken=96d09a1eb7f44a77, processorArchitecture=MSIL">
+    <Reference Include="Magnum.TestFramework" Condition="'$(TargetFrameworkVersion)' == 'v3.5'">
+      <HintPath>..\..\lib\Magnum\net-3.5\TestFramework\Magnum.TestFramework.dll</HintPath>
+    </Reference>
+    <Reference Include="Magnum.TestFramework" Condition="'$(TargetFrameworkVersion)' == 'v4.0'">
+      <HintPath>..\..\lib\Magnum\net-4.0\TestFramework\Magnum.TestFramework.dll</HintPath>
+    </Reference>
+    <Reference Include="nunit.framework">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\lib\NUnit\nunit.framework.dll</HintPath>
+      <HintPath>..\..\lib\NUnit\net-2.0\nunit.framework.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Rhino.Mocks, Version=3.6.0.0, Culture=neutral, PublicKeyToken=0b3305902db7183f, processorArchitecture=MSIL">
@@ -88,11 +95,14 @@
     <Compile Include="..\SolutionVersion.cs">
       <Link>SolutionVersion.cs</Link>
     </Compile>
+    <Compile Include="ATestException.cs" />
     <Compile Include="ExtensionMethodsForSubscriptions.cs" />
     <Compile Include="ExtensionsForTestingEndpoints.cs" />
+    <Compile Include="Fixtures\EndpointCacheProxy.cs" />
     <Compile Include="Fixtures\SagaTestFixture.cs" />
+    <Compile Include="Future.cs" />
+    <Compile Include="Helpers\CorrelatedMessageSinkLocator.cs" />
     <Compile Include="Helpers\EndpointSinkLocator.cs" />
-    <Compile Include="ExtensionMethodsForObjectBuilder.cs" />
     <Compile Include="Fixtures\AbstractTestConsumer.cs" />
     <Compile Include="ConsumerOf.cs" />
     <Compile Include="Fixtures\AbstractTestFixture.cs" />
@@ -101,6 +111,7 @@
     <Compile Include="Fixtures\SubscriptionServiceTestFixture.cs" />
     <Compile Include="Given_a_subscription_service_and_two_service_buses.cs" />
     <Compile Include="Given_two_service_buses_with_shared_subscriptions.cs" />
+    <Compile Include="Helpers\PipelineSinkLocator.cs" />
     <Compile Include="LogSetup.cs" />
     <Compile Include="Messages\DeleteMessage.cs" />
     <Compile Include="SelectiveConsumerOf.cs" />
@@ -111,13 +122,6 @@
     <Compile Include="Transports\TransportContract.cs" />
     <Compile Include="Transports\TransportReceivingContract.cs" />
     <Compile Include="Transports\NonTransactionalTransportSendingContract.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\MassTransit\MassTransit.csproj">
-      <Project>{6EFD69FC-CBCC-4F85-AEE0-EFBA73F4D273}</Project>
-      <Name>MassTransit</Name>
-      <Private>False</Private>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Content Include="MassTransit.TestFramework.log4net.xml">
@@ -140,6 +144,12 @@
       <ProductName>Windows Installer 3.1</ProductName>
       <Install>true</Install>
     </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MassTransit\MassTransit.csproj">
+      <Project>{6EFD69FC-CBCC-4F85-AEE0-EFBA73F4D273}</Project>
+      <Name>MassTransit</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

@@ -4,7 +4,9 @@
     using System.Diagnostics;
     using System.IO;
     using System.Text;
+    using Context;
     using Magnum.Extensions;
+    using Magnum.TestFramework;
     using MassTransit.Serialization;
     using Messages;
     using NUnit.Framework;
@@ -41,7 +43,7 @@
 
             using (var output = new MemoryStream())
             {
-                serializer.Serialize(output, Message);
+                serializer.Serialize(output, new SendContext<SerializationTestMessage>(Message));
 
                 serializedMessageData = output.ToArray();
 
@@ -50,9 +52,15 @@
 
             using (var input = new MemoryStream(serializedMessageData))
             {
-                var receivedMessage = serializer.Deserialize(input) as SerializationTestMessage;
+            	var receiveContext = ReceiveContext.FromBodyStream(input);
+            	serializer.Deserialize(receiveContext);
 
-                Assert.AreEqual(Message, receivedMessage);
+            	IConsumeContext<SerializationTestMessage> context;
+            	receiveContext.TryGetContext<SerializationTestMessage>(out context).ShouldBeTrue();
+
+            	context.ShouldNotBeNull();
+
+            	context.Message.ShouldEqual(Message);
             }
         }
     }
@@ -60,7 +68,7 @@
 
     [TestFixture]
     public class WhenUsingTheCustomXmlOnComplexMessage :
-        GivenAComplexMessage<CustomXmlMessageSerializer>
+        GivenAComplexMessage<XmlMessageSerializer>
     {
 
     }
@@ -83,6 +91,13 @@
     [TestFixture]
     public class WhenUsingJsonOnComplexMessage :
         GivenAComplexMessage<JsonMessageSerializer>
+    {
+
+    }
+
+	[TestFixture]
+    public class WhenUsingBsonOnComplexMessage :
+        GivenAComplexMessage<BsonMessageSerializer>
     {
 
     }

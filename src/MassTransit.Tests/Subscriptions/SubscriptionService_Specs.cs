@@ -14,17 +14,17 @@ namespace MassTransit.Tests.Subscriptions
 {
 	using System;
 	using System.Diagnostics;
-	using System.Threading;
 	using Magnum;
 	using Magnum.Extensions;
 	using MassTransit.Pipeline.Inspectors;
 	using MassTransit.Services.Subscriptions.Messages;
 	using MassTransit.Transports;
+	using MassTransit.Transports.Loopback;
 	using Messages;
 	using NUnit.Framework;
-	using Rhino.Mocks;
 	using TestConsumers;
 	using TextFixtures;
+	using TestFramework;
 
 	[TestFixture]
 	public class SubscriptionService_Specs :
@@ -56,38 +56,29 @@ namespace MassTransit.Tests.Subscriptions
 		{
 			Guid clientId = CombGuid.Generate();
 
-			var subscription = new SubscriptionInformation(clientId, 1, typeof (PingMessage), RemoteBus.Endpoint.Uri);
+			var subscription = new SubscriptionInformation(clientId, 1, typeof (PingMessage), RemoteBus.Endpoint.Address.Uri);
 
 			LocalControlBus.Endpoint.Send(new AddSubscription(subscription));
-			Thread.Sleep(250);
+			LocalBus.ShouldHaveRemoteSubscriptionFor<PingMessage>();
 
 			LocalControlBus.Endpoint.Send(new RemoveSubscription(subscription));
 			LocalControlBus.Endpoint.Send(new RemoveSubscription(subscription));
-			Thread.Sleep(250);
 
-			PipelineViewer.Trace(LocalBus.OutboundPipeline);
-		}
-
-		[Test, Ignore]
-		public void The_initial_subscriptions_should_be_read_from_the_repository()
-		{
-			SubscriptionRepository.AssertWasCalled(x => x.List());
+			LocalBus.ShouldNotHaveSubscriptionFor<PingMessage>();
 		}
 
 		[Test]
 		public void The_system_should_be_ready_to_use_before_getting_underway()
 		{
 			var consumer = new TestMessageConsumer<PingMessage>();
-			var unsubscribeAction = RemoteBus.Subscribe(consumer);
+			var unsubscribeAction = RemoteBus.SubscribeInstance(consumer);
 
-			Thread.Sleep(1000);
-
-			DumpPipelines();
+			LocalBus.ShouldHaveRemoteSubscriptionFor<PingMessage>();
 
 			var message = new PingMessage();
 			LocalBus.Publish(message);
 
-			consumer.ShouldHaveReceivedMessage(message, 500.Milliseconds());
+			consumer.ShouldHaveReceivedMessage(message, 8.Seconds());
 
 			unsubscribeAction();
 		}

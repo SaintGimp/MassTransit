@@ -1,4 +1,4 @@
-﻿// Copyright 2007-2011 The Apache Software Foundation.
+﻿// Copyright 2007-2011 Chris Patterson, Dru Sellers, Travis Smith, et. al.
 //  
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 // this file except in compliance with the License. You may obtain a copy of the 
@@ -17,29 +17,31 @@ namespace MassTransit.Transports.Msmq
 	using System.Messaging;
 	using System.Transactions;
 	using log4net;
-	using Magnum.Extensions;
 
 	[DebuggerDisplay("IN:TX:{Address}")]
 	public class TransactionalInboundMsmqTransport :
 		InboundMsmqTransport
 	{
-		private static readonly ILog _log = LogManager.GetLogger(typeof (TransactionalInboundMsmqTransport));
+		static readonly ILog _log = LogManager.GetLogger(typeof (TransactionalInboundMsmqTransport));
+		readonly IsolationLevel _isolationLevel;
+		readonly TimeSpan _transactionTimeout;
 
-		public TransactionalInboundMsmqTransport(IMsmqEndpointAddress address)
+		public TransactionalInboundMsmqTransport(IMsmqEndpointAddress address, TimeSpan transactionTimeout,
+		                                         IsolationLevel isolationLevel)
 			: base(address)
 		{
+			_transactionTimeout = transactionTimeout;
+			_isolationLevel = isolationLevel;
 		}
 
 		public override void Receive(Func<IReceiveContext, Action<IReceiveContext>> callback, TimeSpan timeout)
 		{
 			try
 			{
-				Connect();
-
 				var options = new TransactionOptions
 					{
-						IsolationLevel = IsolationLevel.Serializable,
-						Timeout = 30.Seconds(),
+						IsolationLevel = _isolationLevel,
+						Timeout = _transactionTimeout,
 					};
 
 				using (var scope = new TransactionScope(TransactionScopeOption.Required, options))

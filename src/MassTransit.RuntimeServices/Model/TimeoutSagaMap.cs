@@ -1,5 +1,5 @@
-// Copyright 2007-2010 The Apache Software Foundation.
-// 
+// Copyright 2007-2011 Chris Patterson, Dru Sellers, Travis Smith, et. al.
+//  
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 // this file except in compliance with the License. You may obtain a copy of the 
 // License at 
@@ -12,24 +12,27 @@
 // specific language governing permissions and limitations under the License.
 namespace MassTransit.RuntimeServices.Model
 {
-    using FluentNHibernate.Mapping;
-    using Magnum.ForNHibernate.StateMachine;
-    using Services.Timeout.Server;
+	using FluentNHibernate.Mapping;
+	using NHibernateIntegration;
+	using Services.Timeout.Server;
+	using Util;
 
-    public class TimeoutSagaMap :
-        ClassMap<TimeoutSaga>
-    {
-        public TimeoutSagaMap()
-        {
-            CompositeId()
-                .KeyProperty(x => x.CorrelationId)
-                .KeyProperty(x => x.Tag);
+	[UsedImplicitly]
+	public class TimeoutSagaMap :
+		ClassMap<TimeoutSaga>
+	{
+		public TimeoutSagaMap()
+		{
+			Id(x => x.CorrelationId);
 
-            Map(x => x.CurrentState)
-                .Access.ReadOnlyPropertyThroughCamelCaseField(Prefix.Underscore)
-                .CustomType<StateMachineUserType>();
+			Map(x => x.TimeoutId);
+			Map(x => x.Tag);
 
-            Map(x => x.TimeoutAt);
-        }
-    }
+			Map(x => x.CurrentState)
+				.Access.ReadOnlyPropertyThroughCamelCaseField(Prefix.Underscore)
+				.CustomType<StateMachineUserType>();
+
+			Map(x => x.TimeoutAt);
+		}
+	}
 }

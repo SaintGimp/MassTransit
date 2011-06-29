@@ -12,12 +12,12 @@
 // specific language governing permissions and limitations under the License.
 namespace MassTransit.Tests
 {
-    using Magnum;
 	using Magnum.Extensions;
     using Magnum.TestFramework;
     using MassTransit.Pipeline.Inspectors;
 	using NUnit.Framework;
-	using TextFixtures;
+    using TestFramework;
+    using TextFixtures;
 
 	[TestFixture]
 	public class Sending_a_message_that_implements_an_interface :
@@ -28,7 +28,7 @@ namespace MassTransit.Tests
 		{
 			var first = new Future<FirstMessageContract>();
 
-			RemoteBus.Subscribe<FirstMessageContract>(first.Complete);
+			RemoteBus.SubscribeHandler<FirstMessageContract>(first.Complete);
 
 			PipelineViewer.Trace(RemoteBus.InboundPipeline);
 
@@ -47,10 +47,11 @@ namespace MassTransit.Tests
 
 			// These can't be on the same bus, because we only send a message to an endpoint once
 			// maybe we can do something here by changing the outbound context to keep track of tmessage/endpoint uri
-			RemoteBus.Subscribe<FirstMessageContract>(first.Complete);
-			LocalBus.Subscribe<SecondMessageContract>(second.Complete);
+			RemoteBus.SubscribeHandler<FirstMessageContract>(first.Complete);
+			LocalBus.SubscribeHandler<SecondMessageContract>(second.Complete);
 
 			PipelineViewer.Trace(RemoteBus.InboundPipeline);
+			PipelineViewer.Trace(LocalBus.InboundPipeline);
 
 			var message = new SomeMessageContract("Joe", 27);
 

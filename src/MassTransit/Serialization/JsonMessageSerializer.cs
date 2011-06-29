@@ -1,5 +1,5 @@
-// Copyright 2007-2010 The Apache Software Foundation.
-// 
+// Copyright 2007-2011 Chris Patterson, Dru Sellers, Travis Smith, et. al.
+//  
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 // this file except in compliance with the License. You may obtain a copy of the 
 // License at 
@@ -12,39 +12,99 @@
 // specific language governing permissions and limitations under the License.
 namespace MassTransit.Serialization
 {
-    using System;
-    using System.IO;
-    using System.Text;
-    using Internal;
-    using log4net;
-    using Magnum.Extensions;
-    using Newtonsoft.Json;
+	using System;
+	using System.Collections.Generic;
+	using System.IO;
+	using Custom;
+	using Newtonsoft.Json;
+	using Newtonsoft.Json.Linq;
 
-    public class JsonMessageSerializer :
-        IMessageSerializer
-    {
-        static readonly ILog _log = LogManager.GetLogger(typeof (JsonMessageSerializer));
+	public class JsonMessageSerializer :
+		IMessageSerializer
+	{
+		const string ContentTypeHeaderValue = "application/vnd.masstransit+json";
 
-        public void Serialize<T>(Stream output, T message)
-        {
-            var data = JsonConvert.SerializeObject(message);
-            var envelope = JsonMessageEnvelope.Create<T>(data);
-            var strOut = JsonConvert.SerializeObject(envelope);
-            var buff = Encoding.UTF8.GetBytes(strOut);
+		[ThreadStatic]
+		static JsonSerializer _deserializer;
 
-            output.Write(buff, 0, buff.Length);
-        }
+		[ThreadStatic]
+		static JsonSerializer _serializer;
 
-        public object Deserialize(Stream input)
-        {
-            var text = input.ReadToEndAsText();
-            var env = JsonConvert.DeserializeObject<JsonMessageEnvelope>(text);
+		public static JsonSerializer Deserializer
+		{
+			get
+			{
+				return _deserializer ?? (_deserializer = JsonSerializer.Create(new JsonSerializerSettings
+					{
+						NullValueHandling = NullValueHandling.Ignore,
+						DefaultValueHandling = DefaultValueHandling.Ignore,
+						MissingMemberHandling = MissingMemberHandling.Ignore,
+						ObjectCreationHandling = ObjectCreationHandling.Auto,
+						ConstructorHandling = ConstructorHandling.AllowNonPublicDefaultConstructor,
+						ContractResolver = new JsonContractResolver(),
+						Converters = new List<JsonConverter>(new JsonConverter[]
+							{
+								new ListJsonConverter(),
+								new InterfaceProxyConverter(),
+							})
+					}));
+			}
+		}
 
-            InboundMessageHeaders.SetCurrent(env.GetMessageHeadersSetAction());
+		public static JsonSerializer Serializer
+		{
+			get
+			{
+				return _serializer ?? (_serializer = JsonSerializer.Create(new JsonSerializerSettings
+					{
+						NullValueHandling = NullValueHandling.Ignore,
+						DefaultValueHandling = DefaultValueHandling.Ignore,
+						MissingMemberHandling = MissingMemberHandling.Ignore,
+						ObjectCreationHandling = ObjectCreationHandling.Auto,
+						ConstructorHandling = ConstructorHandling.AllowNonPublicDefaultConstructor,
+						ContractResolver = new JsonContractResolver(),
+					}));
+			}
+		}
 
-            var data = env.Message;
-            var mtype = Type.GetType(env.MessageType);
-            return JsonConvert.DeserializeObject(data, mtype);
-        }
-    }
-}
+		public string ContentType
+		{
+			get { return ContentTypeHeaderValue; }
+		}
+
+		public void Serialize<T>(Stream output, ISendContext<T> context)
+			where T : class
+		{
+			context.SetContentType(ContentTypeHeaderValue);
+
+			Envelope envelope = Envelope.Create(context);
+
+			using (var nonClosingStream = new NonClosingStream(output))
+			using (var writer = new StreamWriter(nonClosingStream))
+			using (var jsonWriter = new JsonTextWriter(writer))
+			{
+				jsonWriter.Formatting = Formatting.Indented;
+
+				Serializer.Serialize(jsonWriter, envelope);
+
+				jsonWriter.Flush();
+				writer.Flush();
+			}
+		}
+
+		public void Deserialize(IReceiveContext context)
+		{
+			Envelope result;
+			using (var nonClosingStream = new NonClosingStream(context.BodyStream))
+			using (var reader = new StreamReader(nonClosingStream))
+			using (var jsonReader = new JsonTextReader(reader))
+			{
+				result = Deserializer.Deserialize<Envelope>(jsonReader);
+			}
+
+			context.SetUsingEnvelope(result);
+			context.SetMessageTypeConverter(new JsonMessageTypeConverter(Deserializer, result.Message as JToken,
+				result.MessageType));
+		}
+	}
+}   

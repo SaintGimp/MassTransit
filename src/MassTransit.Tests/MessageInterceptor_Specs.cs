@@ -13,9 +13,8 @@
 namespace MassTransit.Tests
 {
     using System.Threading;
-    using Configuration;
     using Magnum.TestFramework;
-    using MassTransit.Transports;
+    using MassTransit.Transports.Loopback;
     using Messages;
     using NUnit.Framework;
     using TextFixtures;
@@ -32,7 +31,7 @@ namespace MassTransit.Tests
         [Test]
         public void An_interceptor_should_be_called_when_a_message_is_received()
         {
-            LocalBus.Subscribe<PingMessage>(x => { Assert.IsFalse(_after.WaitOne(0, false), "Should not have called after yet"); });
+            LocalBus.SubscribeHandler<PingMessage>(x => { Assert.IsFalse(_after.WaitOne(0, false), "Should not have called after yet"); });
 
             LocalBus.Publish(new PingMessage());
 
@@ -47,7 +46,7 @@ namespace MassTransit.Tests
             _before = new ManualResetEvent(false);
             _after = new ManualResetEvent(false);
 
-            LocalBus = ServiceBusConfigurator.New(x =>
+            LocalBus = ServiceBusFactory.New(x =>
                 {
                     x.ReceiveFrom("loopback://localhost/mt_client");
 

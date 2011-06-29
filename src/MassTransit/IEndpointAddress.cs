@@ -14,6 +14,9 @@ namespace MassTransit
 {
     using System;
 
+	/// <summary>
+	/// Identifies an endpoint
+	/// </summary>
     public interface IEndpointAddress
     {
         /// <summary>
@@ -25,8 +28,6 @@ namespace MassTransit
         /// True if the endpoint is local to this machine
         /// </summary>
         bool IsLocal { get; }
-
-        string Path { get; }
 
         /// <summary>
         /// Was transactional requested by the Uri

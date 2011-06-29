@@ -15,6 +15,7 @@ namespace MassTransit.Tests.Serialization
 	using System;
 	using System.Diagnostics;
 	using System.IO;
+	using Context;
 	using Magnum.Extensions;
 	using MassTransit.Serialization;
 	using Messages;
@@ -26,6 +27,7 @@ namespace MassTransit.Tests.Serialization
 		[Test, Category("Integration")]
 		public void Just_how_fast_are_you()
 		{
+			Trace.WriteLine("Serializer: " + typeof(TSerializer).Name);
 			var message = new SerializationTestMessage
 				{
 					DecimalValue = 123.45m,
@@ -49,12 +51,12 @@ namespace MassTransit.Tests.Serialization
 				byte[] data;
 				using (var output = new MemoryStream())
 				{
-					serializer.Serialize(output, message);
+					serializer.Serialize(output, message.ToSendContext());
 					data = output.ToArray();
 				}
 				using (var input = new MemoryStream(data))
 				{
-					serializer.Deserialize(input);
+					serializer.Deserialize(ReceiveContext.FromBodyStream(input));
 				}
 			}
 
@@ -66,7 +68,7 @@ namespace MassTransit.Tests.Serialization
 			{
 				using (var output = new MemoryStream())
 				{
-					serializer.Serialize(output, message);
+					serializer.Serialize(output, message.ToSendContext());
 				}
 			}
 
@@ -80,7 +82,7 @@ namespace MassTransit.Tests.Serialization
 			byte[] sample;
 			using (var output = new MemoryStream())
 			{
-				serializer.Serialize(output, message);
+				serializer.Serialize(output, message.ToSendContext());
 				sample = output.ToArray();
 			}
 
@@ -90,7 +92,7 @@ namespace MassTransit.Tests.Serialization
 			{
 				using (var input = new MemoryStream(sample))
 				{
-					serializer.Deserialize(input);
+					serializer.Deserialize(ReceiveContext.FromBodyStream(input));
 				}
 			}
 
@@ -104,8 +106,14 @@ namespace MassTransit.Tests.Serialization
 	}
 
     [TestFixture]
+    public class WhenUsingVersionOneXmlInPerfTest:
+        Performance_Specs<VersionOneXmlMessageSerializer>
+    {
+    }
+
+    [TestFixture]
     public class WhenUsingCustomXmlInPerfTest:
-        Performance_Specs<CustomXmlMessageSerializer>
+        Performance_Specs<XmlMessageSerializer>
     {
     }
 
@@ -124,6 +132,13 @@ namespace MassTransit.Tests.Serialization
     [TestFixture]
     public class WhenUsingJsonInPerfTest :
         Performance_Specs<JsonMessageSerializer>
+    {
+        
+    }
+
+	[TestFixture]
+    public class WhenUsingBsonInPerfTest :
+        Performance_Specs<BsonMessageSerializer>
     {
         
     }

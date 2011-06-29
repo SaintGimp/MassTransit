@@ -16,7 +16,9 @@ namespace MassTransit.Tests.Serialization
     using System.Diagnostics;
     using System.IO;
     using System.Text;
+    using Context;
     using Magnum.Extensions;
+    using Magnum.TestFramework;
     using MassTransit.Serialization;
     using Messages;
     using NUnit.Framework;
@@ -52,27 +54,31 @@ namespace MassTransit.Tests.Serialization
 
             using (var output = new MemoryStream())
             {
-                serializer.Serialize(output, _message);
+                serializer.Serialize(output, _message.ToSendContext());
 
                 serializedMessageData = output.ToArray();
 
-                Trace.WriteLine(Encoding.UTF8.GetString(serializedMessageData));
+      //          Trace.WriteLine(Encoding.UTF8.GetString(serializedMessageData));
             }
-
-            var deserializer = new PreSharedKeyEncryptedMessageSerializer(key, new TSerializer());
 
             using (var input = new MemoryStream(serializedMessageData))
             {
-                var receivedMessage = deserializer.Deserialize(input) as PartialSerializationTestMessage;
+				var receiveContext = ReceiveContext.FromBodyStream(input);
+				serializer.Deserialize(receiveContext);
 
-                Assert.AreEqual(_message, receivedMessage);
+				IConsumeContext<PartialSerializationTestMessage> context;
+				receiveContext.TryGetContext<PartialSerializationTestMessage>(out context).ShouldBeTrue();
+
+				context.ShouldNotBeNull();
+
+				context.Message.ShouldEqual(_message);
             }
         }
     }
 
     [TestFixture]
     public class WhenUsingCustomXmlWithEncryption : 
-        PreSharedKeyEncryptedSerialization_Specs<CustomXmlMessageSerializer>
+        PreSharedKeyEncryptedSerialization_Specs<XmlMessageSerializer>
     {
     }
     [TestFixture]
@@ -88,6 +94,11 @@ namespace MassTransit.Tests.Serialization
     [TestFixture]
     public class WhenUsingJsonWithEncryption : 
         PreSharedKeyEncryptedSerialization_Specs<JsonMessageSerializer>
+    {
+    }
+    [TestFixture]
+    public class WhenUsingBsonWithEncryption : 
+        PreSharedKeyEncryptedSerialization_Specs<BsonMessageSerializer>
     {
     }
 }

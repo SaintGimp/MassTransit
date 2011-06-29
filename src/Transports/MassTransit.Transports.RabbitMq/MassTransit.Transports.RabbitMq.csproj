@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>MassTransit.Transports.RabbitMq</RootNamespace>
     <AssemblyName>MassTransit.Transports.RabbitMq</AssemblyName>
-    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
@@ -31,6 +31,7 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -41,6 +42,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <NoWarn>1591</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -50,14 +52,20 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <DocumentationFile>bin\Release\MassTransit.Transports.RabbitMq.XML</DocumentationFile>
+    <NoWarn>1591</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="log4net, Version=1.2.10.0, Culture=neutral, PublicKeyToken=1b44e1d426115821, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\lib\log4net.dll</HintPath>
+      <Private>False</Private>
     </Reference>
-    <Reference Include="Magnum">
-      <HintPath>..\..\..\lib\Magnum\Magnum.dll</HintPath>
+    <Reference Include="Magnum" Condition="'$(TargetFrameworkVersion)' == 'v3.5'">
+      <HintPath>..\..\..\lib\Magnum\net-3.5\Magnum.dll</HintPath>
+    </Reference>
+    <Reference Include="Magnum" Condition="'$(TargetFrameworkVersion)' == 'v4.0'">
+      <HintPath>..\..\..\lib\Magnum\net-4.0\Magnum.dll</HintPath>
     </Reference>
     <Reference Include="RabbitMQ.Client, Version=1.6.0.0, Culture=neutral, PublicKeyToken=89e7d7c5feba84ce, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -72,17 +80,32 @@
     <Compile Include="..\..\SolutionVersion.cs">
       <Link>SolutionVersion.cs</Link>
     </Compile>
-    <Compile Include="RabbitMqAddress.cs" />
+    <Compile Include="InboundRabbitMqTransport.cs" />
+    <Compile Include="IRabbitMqEndpointAddress.cs" />
+    <Compile Include="Management\IRabbitMqEndpointManagement.cs" />
+    <Compile Include="Management\RabbitMQEndpointManagement.cs" />
+    <Compile Include="MessageName.cs" />
+    <Compile Include="OutboundRabbitMqTransport.cs" />
+    <Compile Include="PublishEndpointInterceptor.cs" />
+    <Compile Include="PublishEndpointSinkLocator.cs" />
+    <Compile Include="RabbitMqEndpointAddress.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RabbitMqReceiveContext.cs" />
-    <Compile Include="RabbitMqSendContext.cs" />
-    <Compile Include="RabbitMqTransport.cs" />
+    <Compile Include="RabbitMqAddressException.cs" />
+    <Compile Include="RabbitMqConfigurationExtensions.cs" />
+    <Compile Include="RabbitMqHelper.cs" />
+    <Compile Include="LoopbackRabbitMqTransport.cs" />
+    <Compile Include="RabbitMqSubscriptionBinder.cs" />
     <Compile Include="RabbitMqTransportFactory.cs" />
+    <Compile Include="Configuration\RabbitMqServiceBusExtensions.cs" />
+    <Compile Include="Testing\BusTestScenarioExtensions.cs" />
+    <Compile Include="Testing\RabbitMqBusScenarioBuilder.cs" />
+    <Compile Include="TransactionalBehavior.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\MassTransit\MassTransit.csproj">
       <Project>{6EFD69FC-CBCC-4F85-AEE0-EFBA73F4D273}</Project>
       <Name>MassTransit</Name>
+      <Private>False</Private>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

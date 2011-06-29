@@ -1,4 +1,4 @@
-// Copyright 2007-2011 The Apache Software Foundation.
+// Copyright 2007-2011 Chris Patterson, Dru Sellers, Travis Smith, et. al.
 //  
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 // this file except in compliance with the License. You may obtain a copy of the 
@@ -13,7 +13,7 @@
 namespace MassTransit.TestFramework
 {
 	using System;
-	using Magnum;
+	using Context;
 	using Magnum.TestFramework;
 	using MassTransit.Transports;
 	using NUnit.Framework;
@@ -26,16 +26,19 @@ namespace MassTransit.TestFramework
 		{
 			var future = new Future<TMessage>();
 
-			transport.Receive(message =>
+			transport.Receive(context =>
 				{
-					message.ShouldNotBeNull();
-					message.ShouldBeAnInstanceOf<IReceiveContext>();
+					context.ShouldNotBeNull();
+					context.ShouldBeAnInstanceOf<IReceiveContext>();
 
-					var messageObj = serializer.Deserialize(message.Body);
+					serializer.Deserialize(context);
 
-					var tm = messageObj as TMessage;
-					if(tm != null)
-						future.Complete(tm);
+					IConsumeContext<TMessage> messageContext;
+					if (context.TryGetContext(out messageContext))
+					{
+						if (!future.IsCompleted)
+							future.Complete(messageContext.Message);
+					}
 
 					return null;
 				}, TimeSpan.Zero);
@@ -48,15 +51,17 @@ namespace MassTransit.TestFramework
 		{
 			var future = new Future<TMessage>();
 
-			endpoint.Receive(message =>
+			endpoint.Receive(context =>
 				{
-					message.ShouldNotBeNull();
+					context.ShouldNotBeNull();
+					context.ShouldBeAnInstanceOf<IReceiveContext>();
 
-					message.ShouldBeAnInstanceOf<TMessage>();
-
-					var tm = (TMessage) message;
-
-					future.Complete(tm);
+					IConsumeContext<TMessage> messageContext;
+					if (context.TryGetContext(out messageContext))
+					{
+						if (!future.IsCompleted)
+							future.Complete(messageContext.Message);
+					}
 
 					return null;
 				}, TimeSpan.Zero);
@@ -65,42 +70,45 @@ namespace MassTransit.TestFramework
 		}
 
 		public static void ShouldContain<TMessage>(this IEndpoint endpoint, TMessage expectedMessage)
-			where TMessage : CorrelatedBy<Guid>
+			where TMessage : class, CorrelatedBy<Guid>
 		{
 			endpoint.ShouldContain(expectedMessage, TimeSpan.Zero);
 		}
 
 		public static void ShouldContain<TMessage>(this IEndpoint endpoint, TMessage expectedMessage, TimeSpan timeout)
-			where TMessage : CorrelatedBy<Guid>
+			where TMessage : class, CorrelatedBy<Guid>
 		{
 			var future = new Future<TMessage>();
 
-			endpoint.Receive(message =>
+			endpoint.Receive(context =>
 				{
-					message.ShouldNotBeNull();
+					context.ShouldNotBeNull();
+					context.ShouldBeAnInstanceOf<IReceiveContext>();
 
-					message.ShouldBeAnInstanceOf<TMessage>();
-
-					var tm = (TMessage) message;
-
-					Assert.AreEqual(expectedMessage.CorrelationId, tm.CorrelationId);
-
-					future.Complete(tm);
+					IConsumeContext<TMessage> messageContext;
+					if (context.TryGetContext(out messageContext))
+					{
+						if (messageContext.Message.CorrelationId == expectedMessage.CorrelationId && !future.IsCompleted)
+							future.Complete(messageContext.Message);
+					}
 
 					return null;
 				}, timeout);
 
-			future.IsCompleted.ShouldBeTrue(endpoint.Address + " should contain a message of type " + typeof (TMessage).Name + " with correlation id " + expectedMessage.CorrelationId);
+			future.IsCompleted.ShouldBeTrue(endpoint.Address + " should contain a message of type " + typeof (TMessage).Name +
+			                                " with correlation id " + expectedMessage.CorrelationId);
 		}
 
 		public static void ShouldNotContain<TMessage>(this IEndpoint endpoint)
 			where TMessage : class
 		{
-			endpoint.Receive(message =>
+			endpoint.Receive(context =>
 				{
-					message.ShouldNotBeNull();
+					context.ShouldNotBeNull();
+					context.ShouldBeAnInstanceOf<IReceiveContext>();
 
-					if (message.GetType() == typeof (TMessage))
+					IConsumeContext<TMessage> messageContext;
+					if (context.TryGetContext(out messageContext))
 					{
 						Assert.Fail(endpoint.Address + " should not contain a message of type " + typeof (TMessage).Name);
 					}
@@ -110,21 +118,22 @@ namespace MassTransit.TestFramework
 		}
 
 		public static void ShouldNotContain<TMessage>(this IEndpoint endpoint, TMessage expectedMessage)
-			where TMessage : CorrelatedBy<Guid>
+			where TMessage : class, CorrelatedBy<Guid>
 		{
-			endpoint.Receive(message =>
+			endpoint.Receive(context =>
 				{
-					message.ShouldNotBeNull();
+					context.ShouldNotBeNull();
+					context.ShouldBeAnInstanceOf<IReceiveContext>();
 
-					if (message.GetType() != expectedMessage.GetType())
-						return null;
+					IConsumeContext<TMessage> messageContext;
+					if (context.TryGetContext(out messageContext))
+					{
+						if (messageContext.Message.CorrelationId != expectedMessage.CorrelationId)
+							return null;
 
-					var tm = (TMessage) message;
-
-					if (tm.CorrelationId != expectedMessage.CorrelationId)
-						return null;
-
-					Assert.Fail(endpoint.Address + " should not contain a message of type " + typeof (TMessage).Name + " with correlation id " + expectedMessage.CorrelationId);
+						Assert.Fail(endpoint.Address + " should not contain a message of type " + typeof (TMessage).Name +
+						            " with correlation id " + expectedMessage.CorrelationId);
+					}
 
 					return null;
 				}, TimeSpan.Zero);
